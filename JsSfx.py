@@ -35,6 +35,9 @@ Usage:
   JsSfx.py input_file output_file [options]
 
 Options:
+  --log-level=number
+     Specify the amount of output to show during compression. 0 = limited, 1 =
+     verbose, 2 = very verbose.
   --max-unused-str-len=number
      Force using a specific decoder stub.
      Use "1" for a small decoder stub with compression limited to replacing
