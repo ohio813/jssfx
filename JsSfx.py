@@ -26,7 +26,10 @@ def PrintUsage():
   Copyright (c) 2006, 2010 Berend-jan "SkyLined" Wever.
   Compression algorithm replaces strings of bytes that are repeated in the
   data with shorter sequences of bytes that do not appear in the data, eg.
-  'Abcdef.Abcdef.Abcdef.' could be encoded as ('X', 'XXXAbcdef.').
+  'Abcdef.Abcdef.Abcdef.' could be encoded as ('X', 'XXXAbcdef.'). Output is
+  a piece of JavaScript that contains the compressed data and will decompressed
+  it when it is executed. Once the data is decompressed, it is executed using
+  "eval()".
 
 Usage:
   JsSfx.py input_file output_file [options]
