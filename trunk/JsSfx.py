@@ -35,6 +35,9 @@ Usage:
   JsSfx.py input_file output_file [options]
 
 Options:
+  --strip
+     Remove comments and superfluous whitespace and semi-colons from input
+     JavaScript before compression.
   --log-level=number
      Specify the amount of output to show during compression. 0 = limited, 1 =
      verbose, 2 = very verbose.
@@ -58,11 +61,14 @@ def Main(*argv):
   output_file_path = None;
   max_unused_str_len = None;
   log_level = 0;
+  use_strip = False;
   for arg in argv:
     if arg.startswith('-'):
       if arg in ['-?', '-h', '--help']:
         PrintUsage();
         return True;
+      elif arg == '--strip':
+        use_strip = True;
       elif arg.startswith('--max-unused-str-len='):
         max_unused_str_len = int(arg[len('--max-unused-str-len='):]);
         if max_unused_str_len not in [1, 2]:
@@ -108,13 +114,15 @@ def Main(*argv):
       return False;
 
     input_file_content = input_file_handle.read();
+    if use_strip:
+      input_file_content = Strip(input_file_content, log_level);
     js_sfxs = [];
     # If max_unused_str_len is 1 or auto, get a JsSfx object for max unused
     # string size 1:
     try1 = max_unused_str_len in [None, 1];
     try2 = max_unused_str_len == 2;
     if try1:
-      print 'Looking for optimal 1 byte unused strings compression:';
+      print 'Adding 1 byte compressor and compressing...';
       js_sfx = JsSfx(input_file_content, 1, log_level);
       js_sfx.Compress();
       js_sfxs.append(js_sfx);
@@ -124,7 +132,7 @@ def Main(*argv):
         if not try2:
           print '(Consider using "--max-unused-str-len=2").';
     if try2:
-      print 'Looking for optimal 2 byte unused strings compression:';
+      print 'Adding 2 byte compressor and compressing...';
       js_sfx = JsSfx(input_file_content, 2, log_level);
       js_sfx.Compress();
       js_sfxs.append(js_sfx);
@@ -202,7 +210,7 @@ class JsSfx(object):
               'c--;' + \
               'd=(t=d.split(r.charAt(c))).join(t.pop())' + \
           ');' + \
-          'eval(d);';
+          'eval(d)';
     elif self.max_unused_str_len == 2:
       start_index = len(self.decompress_str);
       return \
@@ -214,7 +222,7 @@ class JsSfx(object):
               'd=(t=d.split(r.substr(c-=(x=c<%d?1:2),x))).join(t.pop())' % \
                   (self.two_char_switch_index + 1) + \
           ');' + \
-          'eval(d);';
+          'eval(d)';
 
   def GetSmallestUnusedString(self):
     if self.log_level >= 2:
@@ -376,6 +384,131 @@ def FindSubStrings(string, substr):
     indices.append(index);
     index += 1;
 
+CHARS_REQUIRING_SEPARATION = \
+    '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_';
+
+def Strip(in_data, log_level):
+  out_data = Stripper(in_data, log_level).GetStrippedData();
+  print 'The file was stripped from %d to %d bytes (%d%%).' % \
+      (len(in_data), len(out_data), 100 * len(out_data) / len(in_data));
+  return out_data;
+
+class Stripper(object):
+  def __init__(self, in_data, log_level):
+    self.in_data = in_data;
+    self.log_level = log_level;
+    self.index = 0;
+    self.out_data = '';
+
+    self.whitespace_strip_map = {
+        '//': self.StripLineComment,
+        '/*': self.StripBlockComment,
+    };
+    self.strip_map = {
+        '//': self.StripLineComment,
+        '/*': self.StripBlockComment,
+        '\r': self.StripUnneededWhiteSpace,
+        '\n': self.StripUnneededWhiteSpace,
+        ' ':  self.StripUnneededWhiteSpace,
+        '\t': self.StripUnneededWhiteSpace,
+    };
+
+  def GetStrippedData(self):
+    non_stripped = '';
+    while self.index < len(self.in_data):
+      for header, handler in self.strip_map.items():
+        if self.in_data[self.index:self.index + len(header)] == header:
+          if len(non_stripped) > 0:
+            if self.log_level == 2: print '+data   : %s' % repr(non_stripped);
+            self.out_data += non_stripped;
+            non_stripped = '';
+          handler();
+          break;
+      else:
+        non_stripped += self.in_data[self.index];
+        self.index += 1;
+    if self.log_level == 2: print '+data   : %s' % repr(non_stripped);
+    self.out_data += non_stripped;
+    return self.out_data.replace(';;', ';').replace(';}', '}');
+
+  def StripLineComment(self):
+    # Starts with //, so skip first 2 chars
+    comment = self.in_data[self.index:self.index + 2];
+    self.index += 2; 
+    while self.index < len(self.in_data):
+      char = self.in_data[self.index];
+      if char in '\r\n':
+        break;
+      comment += char;
+      self.index += 1;
+    if self.log_level == 2: print '-comment: %s' % repr(comment);
+  
+  def StripBlockComment(self):
+    # Starts with /*, so skip first 2 chars
+    comment = self.in_data[self.index:self.index + 2];
+    self.index += 2; 
+    while self.index < len(self.in_data): 
+      char = self.in_data[self.index];
+      comment += char;
+      if char == '*' and self.in_data[self.index + 1] == '/':
+        comment += '/';
+        break;
+      self.index += 1;
+    else:
+      raise AssertionError('Unterminated block comment found.');
+    if self.log_level == 2: print '-comment: %s' % repr(comment);
+  
+  def StripQuotedString(self):
+    # Starts with quote, so skip first char
+    string = self.in_data[self.index];
+    self.index += 1; 
+    escaped = False;
+    while self.index < len(self.in_data):
+      char = self.in_data[self.index];
+      if not escaped and char == quote:
+        self.out_data += string;
+        break;
+      escaped = char == '\\';
+      string += char;
+      self.index += 1; 
+    else:
+      raise AssertionError('Unterminated quoted string found.');
+    if self.log_level == 2: print '+string : %s' % repr(string);
+
+  def StripUnneededWhiteSpace(self):
+    # Starts with whitespace, so skip first char:
+    in_whitespace = self.in_data[self.index];
+    out_whitespace = '';
+    self.index += 1; 
+    while self.index < len(self.in_data): 
+      for header, handler in self.whitespace_strip_map.items():
+        if self.in_data[self.index:self.index + len(header)] == header:
+          handler();
+          break;
+      else:
+        char = self.in_data[self.index];
+        if char in ' \t\r\n':
+          in_whitespace += char;
+          self.index += 1; 
+        else:
+          if len(self.out_data) == 0:
+            msg = 'whitespace at start of data';
+          elif char in CHARS_REQUIRING_SEPARATION \
+              and self.out_data[-1] in CHARS_REQUIRING_SEPARATION:
+            msg = 'combining %s and %s requires whitespace' % (repr(self.out_data[-1]), repr(char));
+            out_whitespace = ' ';
+          else:
+            msg = 'combining %s and %s does not require whitespace' % (repr(self.out_data[-1]), repr(char));
+          break;
+    else:
+      msg = 'whitespace until end of data';
+    self.out_data += out_whitespace;
+    if in_whitespace == out_whitespace:
+      if self.log_level == 2: print '+spacing: %s (%s)' % (repr(out_whitespace), msg);
+    elif out_whitespace == '':
+      if self.log_level == 2: print '-spacing: %s (%s)' % (repr(in_whitespace), msg);
+    else:
+      if self.log_level == 2: print '~spacing: %s => %s (%s)' % (repr(in_whitespace), repr(out_whitespace), msg);
 
 if __name__ == "__main__":
   success = Main(*sys.argv[1:]);
