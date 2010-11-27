@@ -38,6 +38,8 @@ Options:
   --strip
      Remove comments and superfluous whitespace and semi-colons from input
      JavaScript before compression.
+  --strip-only
+     Same as --strip, but do not compress the data.
   --log-level=number
      Specify the amount of output to show during compression. 0 = limited, 1 =
      verbose, 2 = very verbose.
@@ -62,6 +64,7 @@ def Main(*argv):
   max_unused_str_len = None;
   log_level = 0;
   use_strip = False;
+  strip_only = False;
   for arg in argv:
     if arg.startswith('-'):
       if arg in ['-?', '-h', '--help']:
@@ -69,6 +72,9 @@ def Main(*argv):
         return True;
       elif arg == '--strip':
         use_strip = True;
+      elif arg == '--strip-only':
+        use_strip = True;
+        strip_only = True;
       elif arg.startswith('--max-unused-str-len='):
         max_unused_str_len = int(arg[len('--max-unused-str-len='):]);
         if max_unused_str_len not in [1, 2]:
@@ -114,39 +120,12 @@ def Main(*argv):
       return False;
 
     input_file_content = input_file_handle.read();
+    data = input_file_content;
     if use_strip:
-      input_file_content = Strip(input_file_content, log_level);
-    js_sfxs = [];
-    # If max_unused_str_len is 1 or auto, get a JsSfx object for max unused
-    # string size 1:
-    try1 = max_unused_str_len in [None, 1];
-    try2 = max_unused_str_len == 2;
-    if try1:
-      print 'Adding 1 byte compressor and compressing...';
-      js_sfx = JsSfx(input_file_content, 1, log_level);
-      js_sfx.Compress();
-      js_sfxs.append(js_sfx);
-      if js_sfx.ran_out_of_unused_strs:
-        try2 = max_unused_str_len is None;
-        print 'Further compression might be possible.';
-        if not try2:
-          print '(Consider using "--max-unused-str-len=2").';
-    if try2:
-      print 'Adding 2 byte compressor and compressing...';
-      js_sfx = JsSfx(input_file_content, 2, log_level);
-      js_sfx.Compress();
-      js_sfxs.append(js_sfx);
-    # If we only created one JsSfx object, or the first is smaller than the
-    # second, use the first JsSfx object. Otherwise use the second:
-    if len(js_sfxs) == 1 or len(js_sfxs[0]) < len(js_sfxs[1]):
-      if len(js_sfxs) != 1:
-        print 'Using 1 byte unused strings is most efficient.';
-      js_sfx = js_sfxs[0];
-    else:
-      if len(js_sfxs) != 1:
-        print 'Using 2 byte unused strings is most efficient.';
-      js_sfx = js_sfxs[1];
-    output_file_content = str(js_sfx);
+      data = Strip(data, log_level);
+    if not strip_only:
+      data = TryJsSfx(data, max_unused_str_len, log_level);
+    output_file_content = data;
     if len(output_file_content) > len(input_file_content):
       print 'The file cannot be compressed.';
       print 'The compressed file is %d bytes larger than the original.' % \
@@ -173,6 +152,39 @@ def Main(*argv):
       input_file_handle.close();
     if output_file_handle is not None:
       output_file_handle.close();
+
+def TryJsSfx(data, max_unused_str_len, log_level):
+  js_sfxs = [];
+  # If max_unused_str_len is 1 or auto, get a JsSfx object for max unused
+  # string size 1:
+  try1 = max_unused_str_len in [None, 1];
+  try2 = max_unused_str_len == 2;
+  if try1:
+    print 'Adding 1 byte compressor and compressing...';
+    js_sfx = JsSfx(data, 1, log_level);
+    js_sfx.Compress();
+    js_sfxs.append(js_sfx);
+    if js_sfx.ran_out_of_unused_strs:
+      try2 = max_unused_str_len is None;
+      print 'Further compression might be possible.';
+      if not try2:
+        print '(Consider using "--max-unused-str-len=2").';
+  if try2:
+    print 'Adding 2 byte compressor and compressing...';
+    js_sfx = JsSfx(data, 2, log_level);
+    js_sfx.Compress();
+    js_sfxs.append(js_sfx);
+  # If we only created one JsSfx object, or the first is smaller than the
+  # second, use the first JsSfx object. Otherwise use the second:
+  if len(js_sfxs) == 1 or len(js_sfxs[0]) < len(js_sfxs[1]):
+    if len(js_sfxs) != 1:
+      print 'Using 1 byte unused strings is most efficient.';
+    js_sfx = js_sfxs[0];
+  else:
+    if len(js_sfxs) != 1:
+      print 'Using 2 byte unused strings is most efficient.';
+    js_sfx = js_sfxs[1];
+  return str(js_sfx);
 
 class JsSfx(object):
   def __init__(self, compressed_str, max_unused_str_len, log_level, \
@@ -407,6 +419,8 @@ class Stripper(object):
     self.strip_map = {
         '//': self.StripLineComment,
         '/*': self.StripBlockComment,
+        '\'': self.StripQuotedString,
+        '"':  self.StripQuotedString,
         '\r': self.StripUnneededWhiteSpace,
         '\n': self.StripUnneededWhiteSpace,
         ' ':  self.StripUnneededWhiteSpace,
@@ -460,17 +474,17 @@ class Stripper(object):
   
   def StripQuotedString(self):
     # Starts with quote, so skip first char
-    string = self.in_data[self.index];
+    quote = string = self.in_data[self.index];
     self.index += 1; 
     escaped = False;
     while self.index < len(self.in_data):
       char = self.in_data[self.index];
+      string += char;
+      self.index += 1; 
       if not escaped and char == quote:
         self.out_data += string;
         break;
       escaped = char == '\\';
-      string += char;
-      self.index += 1; 
     else:
       raise AssertionError('Unterminated quoted string found.');
     if self.log_level == 2: print '+string : %s' % repr(string);
