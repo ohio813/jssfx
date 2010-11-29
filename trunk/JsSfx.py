@@ -215,24 +215,24 @@ class JsSfx(object):
   def __str__(self):
     if self.max_unused_str_len == 1:
       return \
-          'r=%s;' % EncodeJavaScriptString(self.decompress_str) + \
           'd=%s;' % EncodeJavaScriptString(self.compressed_str) + \
           'for(' + \
               'c=%d;' % len(self.decompress_str) + \
               'c--;' + \
-              'd=(t=d.split(r.charAt(c))).join(t.pop())' + \
+              'd=(t=d.split(%s.charAt(c))).join(t.pop())' % \
+                  EncodeJavaScriptString(self.decompress_str) + \
           ');' + \
           'eval(d)';
     elif self.max_unused_str_len == 2:
       start_index = len(self.decompress_str);
       return \
-          'r=%s;' % EncodeJavaScriptString(self.decompress_str) + \
           'd=%s;' % EncodeJavaScriptString(self.compressed_str) + \
           'for(' + \
               'c=%d;' % start_index + \
               'c;' + \
-              'd=(t=d.split(r.substr(c-=(x=c<%d?1:2),x))).join(t.pop())' % \
-                  (self.two_char_switch_index + 1) + \
+              'd=(t=d.split(%s.substr(c-=(x=c<%d?1:2),x))).join(t.pop())' % \
+                  (EncodeJavaScriptString(self.decompress_str), \
+                      self.two_char_switch_index + 1) + \
           ');' + \
           'eval(d)';
 
