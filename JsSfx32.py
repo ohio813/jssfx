@@ -1,14 +1,6 @@
-# -*- coding: latin1 -*-
 # Copyright (c) 2006-2010 Berend-Jan "SkyLined" Wever <berendjanwever@gmail.com>
 # Project homepage: http://code.google.com/p/jssfx/
 # All rights reserved. See COPYRIGHT.txt for details.
-
-HIGH_JS_CHARS =  ' ¡¢£¤¥¦§¨©ª«¬­®¯'  \
-                 '°±²³´µ¶·¸¹º»¼½¾¿'  \
-                 'ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏ'  \
-                 'ĞÑÒÓÔÕÖ×ØÙÚÛÜİŞß'  \
-                 'àáâãäåæçèéêëìíîï'  \
-                 'ğñòóôõö÷øùúûüışÿ';
 
 def EncodeJavaScriptString(string):
   if string.count('"') < string.count("'"):
@@ -85,8 +77,7 @@ def GetMostRepeatedSequence(code, log_level):
       del sequences[sequence];
     sequences.update(new_sequences);
     if log_level > 1:
-      print 'Found %d sequences of %d characters in code' % \
-          (len(new_sequences), sequence_len);
+      print 'Found %d sequences of %d characters in code' % (len(new_sequences), sequence_len);
 
   best_sequence = None;
   best_total_savings = 0;
@@ -96,8 +87,7 @@ def GetMostRepeatedSequence(code, log_level):
       best_total_savings = total_savings;
       best_sequence = sequence;
   if log_level > 1:
-    print 'Best sequences is %d characters and saves %d' % \
-        (len(best_sequence), best_total_savings);
+    print 'Best sequences is %d characters and saves %d' % (len(best_sequence), best_total_savings);
   return best_sequence;
 
 
@@ -117,52 +107,65 @@ def EncodeJavaScriptString(string):
   return quote + encoded_string + quote;
 
 
-def CreateResult(compressed_code, replacements):
+def CreateResult(compressed_code, first_char_code, last_char_code, skip_chars):
   return 'd=%s;' % EncodeJavaScriptString(compressed_code) + \
          'for(' + \
-             'c=%d;' % replacements + \
+             'c=%d;' % (last_char_code - first_char_code + 1) + \
              'c--;' + \
-             'd=(t=d.split(String.fromCharCode(c+%d))).join(t.pop())' % \
-                 ord(HIGH_JS_CHARS[0]) + \
+             'd=(t=d.split(String.fromCharCode(%d+c)))' % first_char_code + \
+                '.join(t.pop()%s)' % ['', '||r'][skip_chars] + \
          ');' + \
          'eval(d)';
 
-def JsSfx3(code, log_level):
-  replacements = 0;
-  compressed_code = code;
-  print 'Size  | Remarks';
-  print '------+'.ljust(80, '-')
-  print '%5d | Original' % len(code);
-  result = CreateResult(compressed_code, replacements);
-  print '%5d | Initial self-extractor' % len(result);
-  best_result = result;
-  for char in HIGH_JS_CHARS:
-    if compressed_code.find(char) != -1:
-      break;
-    replace_sequence = GetMostRepeatedSequence(compressed_code, log_level);
-    compressed_code = compressed_code.replace(replace_sequence, char) + \
-        char + replace_sequence;
-    replacements += 1;
-    result = CreateResult(compressed_code, replacements);
-    print '%5d | Replaced %s with %s' % \
-        (len(result), repr(replace_sequence), repr(char));
-    if len(best_result) > len(result):
-      best_result = result;
+def JsSfx32(code, valid_chars, valid_chars_description, log_level, quick_and_dirty):
+  best_result = None;
+  best_result_details = None;
+  if log_level == 1:
+    print '      | JsSfx3.2\r',;
+  initial_result = CreateResult(code, 0, 0, False);
+  for first_index in range(len(valid_chars)):
+    progress = '@ %d%%' % (100*first_index / len(valid_chars));
+    first_char = valid_chars[first_index]; first_char_code = ord(first_char);
+    results = [(code, initial_result, False)];
+    for last_char_code in range(first_char_code, ord(valid_chars[-1])):
+      last_char = chr(last_char_code);
+      if last_char not in valid_chars:
+        break;
+      last_char_used = code.find(last_char) != -1;
+      new_results = [];
+      for data, result, skips_chars in results:
+        # See what happens if we skip the character:
+        skip_data = data + last_char;
+        skip_result = CreateResult(skip_data, first_char_code, last_char_code, True);
+        skip_result_details = '%02X-%02X%s' % (first_char_code, last_char_code, '+skips');
+        if (not quick_and_dirty and len(EncodeJavaScriptString(last_char)) > 3) or last_char_used:
+          # Character needs two chars to encode; it may turn out to be more efficient to skip it
+          # or the character exists in the data; we cannot use it for compression:
+          new_results.append((skip_data, skip_result, True, skip_result_details));
+        # If the character does not exist in the data; see if we can use it for compression:
+        if not last_char_used:
+          repeated_sequence = GetMostRepeatedSequence(data, log_level);
+          if repeated_sequence is not None:
+            # Compression may be possible:
+            compressed_data = data.replace(repeated_sequence, last_char) + last_char + repeated_sequence;
+            compressed_result = CreateResult(compressed_data, first_char_code, last_char_code, skips_chars);
+            compressed_result_details = '%02X-%02X%s' % (first_char_code, last_char_code, ['', '+skips'][skips_chars]);
+            if len(compressed_result) < len(skip_result):
+              new_results.append((compressed_data, compressed_result, skips_chars, compressed_result_details));
+      # We now have a list of new results, see which one is the best:
+      results = [];
+      for data, result, skips_chars, result_details in new_results:
+        if best_result is None or len(result) < len(best_result):
+          best_result = result;
+          best_result_details = result_details;
+        results.append((data, result, skips_chars));
+      if log_level == 1:
+        print ('\r%5d | JsSfx3.2 %s %02X-%02X*%d %s' % (len(best_result), valid_chars_description, \
+            first_char_code, last_char_code, len(results), progress)).ljust(80),;
+    if log_level == 0:
+      print ('\r%5d | JsSfx3.2 %s %02X-%02X*%d %s' % (len(best_result), valid_chars_description, \
+          first_char_code, last_char_code, len(results), progress)).ljust(80),;
+  if log_level <= 1:
+    print ('\r%5d | JsSfx3.2 %s %s done' % \
+        (len(best_result), valid_chars_description, best_result_details)).ljust(80);
   return best_result;
-
-if __name__ == '__main__':
-  import sys;
-  if len(sys.argv) != 3:
-    print 'Usage: JsSfx3.py "input file" "output file"';
-    sys.exit();
-  try:
-    input = open(sys.argv[1], 'rb').read();
-  except:
-    print 'Cannot read from %s' % sys.argv[1];
-    sys.exit();
-  output = JsSfx3(input, 1);
-  try:
-    open(sys.argv[2], 'wb').write(output);
-  except:
-    print 'Cannot write to %s' % sys.argv[2];
-    sys.exit();

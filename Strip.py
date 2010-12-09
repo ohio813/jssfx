@@ -8,8 +8,9 @@ CHARS_REQUIRING_SEPARATORS = \
 
 def Strip(in_data, log_level):
   out_data = Stripper(in_data, log_level).GetStrippedData();
-  print 'The file was stripped from %d to %d bytes (%d%%).' % \
-      (len(in_data), len(out_data), 100 * len(out_data) / len(in_data));
+  if out_data != in_data:
+    print '%5d | Stripped comments and superfluous separators' % \
+        len(out_data);
   return out_data;
 
 class Stripper(object):
@@ -48,9 +49,17 @@ class Stripper(object):
       else:
         non_stripped += self.in_data[self.index];
         self.index += 1;
-    if self.log_level == 2: print '+data   : %s' % repr(non_stripped);
-    self.out_data += non_stripped;
-    return self.out_data.replace(';;', ';').replace(';}', '}');
+    if len(non_stripped) > 0:
+      if self.log_level == 2: print '+data   : %s' % repr(non_stripped);
+      self.out_data += non_stripped;
+    out_data = self.out_data.replace(';;', ';').replace(';}', '}');
+    while out_data[-1] == ';':
+      out_data = out_data[:-1];
+    if out_data != self.out_data:
+      if self.log_level == 2: print '-semi-colons (%d)' % \
+        (len(self.out_data) - len(out_data));
+      self.out_data = out_data;
+    return self.out_data;
 
   def StripLineComment(self):
     # Starts with //, so skip first 2 chars
@@ -62,7 +71,7 @@ class Stripper(object):
         break;
       comment += char;
       self.index += 1;
-    if self.log_level == 1: print '-comment: %s' % repr(comment);
+    if self.log_level == 2: print '-comment: %s' % repr(comment);
   
   def StripBlockComment(self):
     # Starts with /*, so skip first 2 chars
@@ -77,7 +86,7 @@ class Stripper(object):
       self.index += 1;
     else:
       raise AssertionError('Unterminated block comment found.');
-    if self.log_level == 1: print '-comment: %s' % repr(comment);
+    if self.log_level == 2: print '-comment: %s' % repr(comment);
   
   def StripQuotedString(self):
     # Starts with quote, so skip first char
@@ -94,7 +103,7 @@ class Stripper(object):
       escaped = char == '\\';
     else:
       raise AssertionError('Unterminated quoted string found.');
-    if self.log_level == 1: print '+string : %s' % repr(string);
+    if self.log_level == 2: print '+string : %s' % repr(string);
 
   def StripUnneededWhiteSpace(self):
     # Starts with whitespace, so skip first char:
@@ -130,10 +139,10 @@ class Stripper(object):
       if self.log_level == 2: print '+spacing: %s (%s)' % \
           (repr(out_whitespace), msg);
     elif out_whitespace == '':
-      if self.log_level == 1: print '-spacing: %s (%s)' % \
+      if self.log_level == 2: print '-spacing: %s (%s)' % \
           (repr(in_whitespace), msg);
     else:
-      if self.log_level == 1: print '~spacing: %s => %s (%s)' % \
+      if self.log_level == 2: print '~spacing: %s => %s (%s)' % \
           (repr(in_whitespace), repr(out_whitespace), msg);
 
 if __name__ == '__main__':
