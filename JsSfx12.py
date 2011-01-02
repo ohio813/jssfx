@@ -28,13 +28,14 @@ def EncodeJavaScriptString(string):
   return quote + encoded_string + quote;
 
 class JsSfx12(object):
-  def __init__(self, compressed_str, valid_chars, valid_chars_description, max_unused_str_len, log_level, 
+  def __init__(self, compressed_str, valid_chars, valid_chars_description, max_unused_str_len, log_level, use_charat,
       decompress_str = '', two_char_switch_index = None):
     self.compressed_str = compressed_str;
     self.valid_chars = valid_chars;
     self.valid_chars_description = valid_chars_description;
     self.max_unused_str_len = max_unused_str_len;
     self.log_level = log_level;
+    self.use_charat = use_charat;
     self.decompress_str = decompress_str;
     if two_char_switch_index is None:
       self.two_char_switch_index = len(decompress_str) + 1;
@@ -49,21 +50,24 @@ class JsSfx12(object):
       two_char_switch_index += 1;
     new_compressed_str = self.compressed_str.replace( \
         repeated_str, unused_str) + unused_str + repeated_str;
-    return JsSfx12(new_compressed_str, self.valid_chars, self.valid_chars_description, self.max_unused_str_len, self.log_level, \
-        new_decompress_str, two_char_switch_index);
+    return JsSfx12(new_compressed_str, self.valid_chars, self.valid_chars_description, self.max_unused_str_len, \
+        self.log_level, self.use_charat, new_decompress_str, two_char_switch_index);
 
   def __len__(self):
     return len(str(self));
 
   def __str__(self):
+    if self.use_charat:
+      get_char_c = '.charAt(c)';
+    else:
+      get_char_c = '[c]';
     if self.max_unused_str_len == 1:
       return \
           'd=%s;' % EncodeJavaScriptString(self.compressed_str) + \
           'for(' + \
               'c=%d;' % len(self.decompress_str) + \
               'c--;' + \
-              'd=(t=d.split(%s.charAt(c))).join(t.pop())' % \
-                  EncodeJavaScriptString(self.decompress_str) + \
+              'd=(t=d.split(%s%s)).join(t.pop())' % (EncodeJavaScriptString(self.decompress_str), get_char_c) + \
           ');' + \
           'eval(d)';
     elif self.max_unused_str_len == 2:

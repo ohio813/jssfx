@@ -43,6 +43,9 @@ Options:
      JavaScript before compression.
   --no-compress
      Do not try to compress the script.
+  --charat
+     Use "String.charAt(i)" instead of "String[i]". The later results in smaller
+     code, but requires HTML 4.0 DTD to work in MSIE.
   --ascii
      Use only ASCII characters (00-7F) rather than latin-1 (00-7F+A0-FF).
   --log-level=number
@@ -60,6 +63,7 @@ def Main(*argv):
   input_file_path = None;
   output_file_path = None;
   log_level = 0;
+  use_charat = False;
   use_ascii = False;
   use_strip = True;
   use_compress = True;
@@ -73,6 +77,8 @@ def Main(*argv):
         use_strip = False;
       elif arg == '--no-compress':
         use_compress = False;
+      elif arg == '--charat' || arg == '--charAt':
+        use_charat = True;
       elif arg == '--ascii':
         use_ascii = True;
       elif arg == '--exhaustive':
@@ -138,16 +144,16 @@ def Main(*argv):
         valid_chars_description = 'latin1';
       compressed = [];
       # Try v1.1
-      js_sfx = JsSfx12(data, valid_chars, valid_chars_description, 1, log_level);
+      js_sfx = JsSfx12(data, valid_chars, valid_chars_description, 1, log_level, use_charat);
       js_sfx.Compress();
       compressed.append(str(js_sfx));
       if js_sfx.ran_out_of_unused_strs:
         # Try v1.2
-        js_sfx = JsSfx12(data, valid_chars, valid_chars_description, 2, log_level);
+        js_sfx = JsSfx12(data, valid_chars, valid_chars_description, 2, log_level, use_charat);
         js_sfx.Compress();
         compressed.append(str(js_sfx));
       # Try v3.1/3.2
-      compressed.append(JsSfx32(data, valid_chars, valid_chars_description, log_level, quick_and_dirty));
+      compressed.append(JsSfx32(data, valid_chars, valid_chars_description, log_level, quick_and_dirty, use_charat));
       valid_non_slash_chars = valid_chars;
       data = compressed[0];
       # Select whatever yielded the shortest result.
