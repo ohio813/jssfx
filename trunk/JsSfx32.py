@@ -112,12 +112,12 @@ def CreateResult(compressed_code, first_char_code, last_char_code, skip_chars):
          'for(' + \
              'c=%d;' % (last_char_code - first_char_code + 1) + \
              'c--;' + \
-             'd=(t=d.split(String.fromCharCode(%d+c)))' % first_char_code + \
+             'd=(t=d.split(%sString.fromCharCode(%d+c)))' % (['', 'r='][skip_chars], first_char_code) + \
                 '.join(t.pop()%s)' % ['', '||r'][skip_chars] + \
          ');' + \
          'eval(d)';
 
-def JsSfx32(code, valid_chars, valid_chars_description, log_level, quick_and_dirty):
+def JsSfx32(code, valid_chars, valid_chars_description, log_level, quick_and_dirty, use_charat):
   best_result = None;
   best_result_details = None;
   if log_level == 1:

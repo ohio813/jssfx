@@ -4,19 +4,24 @@
 # All rights reserved. See COPYRIGHT.txt for details.
 import os, sys;
 
-from Strip import Strip;
+from JsStrip import JsStrip;
 from JsSfx12 import JsSfx12;
 from JsSfx32 import JsSfx32;
 
-ASCII_JS_CHARS =  '\1\2\3\4\5\6\7\b\t\r\x0b\f\n\x0e\x0f' \
-                  '\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1a\x1b\x1c\x1d\x1e\x1f' \
+CONTROL_JS_CHARS = \
+                  '\1\2\3\4\5\6\7\b\t\r\x0b\f\n\x0e\x0f' \
+                  '\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1a\x1b\x1c\x1d\x1e\x1f';
+
+PRINTABLE_ASCII_JS_CHARS =  \
                   ' !"#$%&\'()*+,-./' \
                   '0123456789:;<=>?'  \
                   '@ABCDEFGHIJKLMNO'  \
                   'PQRSTUVWXYZ[\\]^_' \
                   '`abcdefghijklmno'  \
                   'pqrstuvwxyz{|}~\x7f';
-LATIN1_JS_CHARS = ASCII_JS_CHARS +    \
+ASCII_JS_CHARS =  CONTROL_JS_CHARS + PRINTABLE_ASCII_JS_CHARS;
+
+PRINTABLE_LATIN1_JS_CHARS = PRINTABLE_ASCII_JS_CHARS +    \
                   ''                  \
                   ''                  \
                   ' ¡¢£¤¥¦§¨©ª«¬­®¯'  \
@@ -25,6 +30,7 @@ LATIN1_JS_CHARS = ASCII_JS_CHARS +    \
                   'ÐÑÒÓÔÕÖ×ØÙÚÛÜÝÞß'  \
                   'àáâãäåæçèéêëìíîï'  \
                   'ðñòóôõö÷øùúûüýþÿ';
+LATIN1_JS_CHARS = CONTROL_JS_CHARS + PRINTABLE_LATIN1_JS_CHARS;
 
 def PrintUsage():
   print """JsSfx - Tool for creating self-extracting compressed JavaScript.
@@ -48,6 +54,8 @@ Options:
      code, but requires HTML 4.0 DTD to work in MSIE.
   --ascii
      Use only ASCII characters (00-7F) rather than latin-1 (00-7F+A0-FF).
+  --printable
+     Use only printable characters and no control characters (00-1F).
   --log-level=number
      Specify the amount of output to show during compression. 0 = limited, 1 =
      verbose, 2 = very verbose.
@@ -65,6 +73,7 @@ def Main(*argv):
   log_level = 0;
   use_charat = False;
   use_ascii = False;
+  use_printable = False;
   use_strip = True;
   use_compress = True;
   quick_and_dirty = True;
@@ -77,10 +86,12 @@ def Main(*argv):
         use_strip = False;
       elif arg == '--no-compress':
         use_compress = False;
-      elif arg == '--charat' || arg == '--charAt':
+      elif arg == '--charat' or arg == '--charAt':
         use_charat = True;
       elif arg == '--ascii':
         use_ascii = True;
+      elif arg == '--printable':
+        use_printable = True;
       elif arg == '--exhaustive':
         quick_and_dirty = False;
       elif arg.startswith('--log-level='):
@@ -134,14 +145,22 @@ def Main(*argv):
     print '======v'.ljust(80, '=');
     print '%5d | Original size' % len(data);
     if use_strip:
-      data = Strip(data, log_level);
+      data = JsStrip(data, log_level);
     if use_compress:
       if use_ascii:
-        valid_chars = ASCII_JS_CHARS;
-        valid_chars_description = 'ASCII';
+        if use_printable:
+          valid_chars = PRINTABLE_ASCII_JS_CHARS;
+          valid_chars_description = 'printable ASCII';
+        else:
+          valid_chars = ASCII_JS_CHARS;
+          valid_chars_description = 'ASCII';
       else:
-        valid_chars = LATIN1_JS_CHARS;
-        valid_chars_description = 'latin1';
+        if use_printable:
+          valid_chars = PRINTABLE_LATIN1_JS_CHARS;
+          valid_chars_description = 'printable latin1';
+        else:
+          valid_chars = LATIN1_JS_CHARS;
+          valid_chars_description = 'latin1';
       compressed = [];
       # Try v1.1
       js_sfx = JsSfx12(data, valid_chars, valid_chars_description, 1, log_level, use_charat);
@@ -158,7 +177,7 @@ def Main(*argv):
       data = compressed[0];
       # Select whatever yielded the shortest result.
       for i in range(1, len(compressed)):
-        if len(compressed[i]) < data:
+        if len(compressed[i]) < len(data):
           data = compressed[i];
     output_file_content = data;
     print '======^'.ljust(80, '=');
