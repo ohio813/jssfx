@@ -6,7 +6,7 @@
 CHARS_REQUIRING_SEPARATORS = \
     '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_';
 
-def Strip(in_data, log_level):
+def JsStrip(in_data, log_level):
   out_data = Stripper(in_data, log_level).GetStrippedData();
   if out_data != in_data:
     print '%5d | Stripped comments and superfluous separators' % \
@@ -33,6 +33,7 @@ class Stripper(object):
         '\n': self.StripUnneededWhiteSpace,
         ' ':  self.StripUnneededWhiteSpace,
         '\t': self.StripUnneededWhiteSpace,
+        '\\\r\n': self.StripUnneededWhiteSpace,
     };
 
   def GetStrippedData(self):
@@ -94,13 +95,20 @@ class Stripper(object):
     self.index += 1; 
     escaped = False;
     while self.index < len(self.in_data):
-      char = self.in_data[self.index];
-      string += char;
-      self.index += 1; 
-      if not escaped and char == quote:
-        self.out_data += string;
-        break;
-      escaped = char == '\\';
+      if not escaped and self.index < len(self.in_data) - 1 and \
+          self.in_data[self.index] == '\\' and self.in_data[self.index + 1] in '\r\n':
+        if self.index < len(self.in_data) - 2 and self.in_data[self.index+1:self.index+3] == '\r\n':
+          self.index += 3;
+        else:
+          self.index += 2;
+      else:
+        char = self.in_data[self.index];
+        string += char;
+        self.index += 1; 
+        if not escaped and char == quote:
+          self.out_data += string;
+          break;
+        escaped = char == '\\';
     else:
       raise AssertionError('Unterminated quoted string found.');
     if self.log_level == 2: print '+string : %s' % repr(string);
