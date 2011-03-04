@@ -10,7 +10,8 @@ from JsSfx32 import JsSfx32;
 
 CONTROL_JS_CHARS = \
                   '\1\2\3\4\5\6\7\b\t\r\x0b\f\n\x0e\x0f' \
-                  '\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1a\x1b\x1c\x1d\x1e\x1f';
+                  '\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1a\x1b\x1c\x1d\x1e\x1f' \
+                  '\x7f';
 
 PRINTABLE_ASCII_JS_CHARS =  \
                   ' !"#$%&\'()*+,-./' \
@@ -18,12 +19,10 @@ PRINTABLE_ASCII_JS_CHARS =  \
                   '@ABCDEFGHIJKLMNO'  \
                   'PQRSTUVWXYZ[\\]^_' \
                   '`abcdefghijklmno'  \
-                  'pqrstuvwxyz{|}~\x7f';
+                  'pqrstuvwxyz{|}~';
 ASCII_JS_CHARS =  CONTROL_JS_CHARS + PRINTABLE_ASCII_JS_CHARS;
 
-PRINTABLE_LATIN1_JS_CHARS = PRINTABLE_ASCII_JS_CHARS +    \
-                  ''                  \
-                  ''                  \
+PRINTABLE_LATIN1_JS_CHARS = PRINTABLE_ASCII_JS_CHARS + \
                   ' ¡¢£¤¥¦§¨©ª«¬­®¯'  \
                   '°±²³´µ¶·¸¹º»¼½¾¿'  \
                   'ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏ'  \
