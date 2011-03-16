@@ -31,6 +31,13 @@ class JsSfx12(object):
   def __init__(self, compressed_str, valid_chars, valid_chars_description, max_unused_str_len, log_level, use_charat,
       decompress_str = '', two_char_switch_index = None):
     self.compressed_str = compressed_str;
+    # The characters " and \ have special meaning in our data and must be escaped.
+    # This means they will use more space than other chars, so we'll save them
+    # for last in case we really need them.
+    if '"' in valid_chars:
+      valid_chars = valid_chars.replace('"', '') + '"';
+    if '\\' in valid_chars:
+      valid_chars = valid_chars.replace('\\', '') + '\\';
     self.valid_chars = valid_chars;
     self.valid_chars_description = valid_chars_description;
     self.max_unused_str_len = max_unused_str_len;
