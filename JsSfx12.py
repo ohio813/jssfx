@@ -28,8 +28,8 @@ def EncodeJavaScriptString(string):
   return quote + encoded_string + quote;
 
 class JsSfx12(object):
-  def __init__(self, compressed_str, valid_chars, valid_chars_description, max_unused_str_len, log_level, use_charat,
-      decompress_str = '', two_char_switch_index = None):
+  def __init__(self, compressed_str, valid_chars, valid_chars_description, max_unused_str_len, log_level, use_charat, 
+      variable_chars, decompress_str = '', two_char_switch_index = None):
     self.compressed_str = compressed_str;
     # Characters that require escaping will use more space in our data than other chars. In order to get the smallest
     # output, they will be save for last when the more efficient characters are exhausted.
@@ -48,6 +48,7 @@ class JsSfx12(object):
     self.max_unused_str_len = max_unused_str_len;
     self.log_level = log_level;
     self.use_charat = use_charat;
+    self.variable_chars = variable_chars;
     self.decompress_str = decompress_str;
     if two_char_switch_index is None:
       self.two_char_switch_index = len(decompress_str) + 1;
@@ -63,37 +64,45 @@ class JsSfx12(object):
     new_compressed_str = self.compressed_str.replace( \
         repeated_str, unused_str) + unused_str + repeated_str;
     return JsSfx12(new_compressed_str, self.valid_chars, self.valid_chars_description, self.max_unused_str_len, \
-        self.log_level, self.use_charat, new_decompress_str, two_char_switch_index);
+        self.log_level, self.use_charat, self.variable_chars, new_decompress_str, two_char_switch_index);
 
   def __len__(self):
     return len(str(self));
 
   def __str__(self):
     if self.use_charat:
-      get_char_c = '.charAt(c)';
+      get_char_c = '.charAt(%s)' % self.variable_chars[1];
     else:
-      get_char_c = '[c]';
+      get_char_c = '[%s]' % self.variable_chars[1];
     if self.max_unused_str_len == 1:
       return \
-          'd=%s;' % EncodeJavaScriptString(self.compressed_str) + \
+          '%s=%s;' % (self.variable_chars[0], EncodeJavaScriptString(self.compressed_str)) + \
           'for(' + \
-              'c=%d;' % len(self.decompress_str) + \
-              'c--;' + \
-              'd=(t=d.split(%s%s)).join(t.pop())' % (EncodeJavaScriptString(self.decompress_str), get_char_c) + \
+              '%s=%d;' % (self.variable_chars[1], len(self.decompress_str)) + \
+              '%s--;' % self.variable_chars[1] + \
+              '%s=(%s=%s.split(%s%s)).join(%s.pop())' % (self.variable_chars[0], self.variable_chars[2], \
+                  self.variable_chars[0], EncodeJavaScriptString(self.decompress_str), get_char_c, \
+                  self.variable_chars[2]) + \
           ');' + \
-          'eval(d)';
+          'eval(%s)' % self.variable_chars[0];
+#          'for(%s in %s=%s)' % (self.variable_chars[1], self.variable_chars[2], EncodeJavaScriptString(self.decompress_str)) + \
+#              '%s=(%s=%s.split(%s%s)).join(%s.pop())' % (self.variable_chars[0], self.variable_chars[3], \
+#                  self.variable_chars[0], self.variable_chars[2], get_char_c, \
+#                  self.variable_chars[3]) + \
+#          ');' + \
     elif self.max_unused_str_len == 2:
       start_index = len(self.decompress_str);
       return \
-          'd=%s;' % EncodeJavaScriptString(self.compressed_str) + \
+          '%s=%s;' % (self.variable_chars[0], EncodeJavaScriptString(self.compressed_str)) + \
           'for(' + \
-              'c=%d;' % start_index + \
-              'c;' + \
-              'd=(t=d.split(%s.substr(c-=(x=c<%d?1:2),x))).join(t.pop())' % \
-                  (EncodeJavaScriptString(self.decompress_str), \
-                      self.two_char_switch_index + 1) + \
+              '%s=%d;' % (self.variable_chars[1], start_index) + \
+              '%s;' % self.variable_chars[1] + \
+              '%s=(%s=%s.split(%s.substr(%s-=(%s=%s<%d?1:2),%s))).join(%s.pop())' % \
+                  (self.variable_chars[0], self.variable_chars[2], self.variable_chars[0], \
+                  EncodeJavaScriptString(self.decompress_str), self.variable_chars[1], self.variable_chars[3], \
+                  self.variable_chars[1], self.two_char_switch_index + 1, self.variable_chars[3], self.variable_chars[2]) + \
           ');' + \
-          'eval(d)';
+          'eval(%s)' % self.variable_chars[0];
     else:
       raise AssertionError('max_unused_str_len = ' + repr(self.max_unused_str_len) + '??');
 
