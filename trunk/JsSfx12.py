@@ -70,39 +70,39 @@ class JsSfx12(object):
     return len(str(self));
 
   def __str__(self):
+    compressed_data_var = self.variable_chars[0];
+    decompress_data_var = self.variable_chars[1];
+    char_var = self.variable_chars[2];
+    temp_var = self.variable_chars[3];
+    inc_var = self.variable_chars[4];
     if self.use_charat:
-      get_char_c = '.charAt(%s)' % self.variable_chars[1];
+      get_char_js = '.charAt(%s)' % char_var;
     else:
-      get_char_c = '[%s]' % self.variable_chars[1];
+      get_char_js = '[%s]' % char_var;
     if self.max_unused_str_len == 1:
-      return \
-          '%s=%s;' % (self.variable_chars[0], EncodeJavaScriptString(self.compressed_str)) + \
-          'for(' + \
-              '%s=%d;' % (self.variable_chars[1], len(self.decompress_str)) + \
-              '%s--;' % self.variable_chars[1] + \
-              '%s=(%s=%s.split(%s%s)).join(%s.pop())' % (self.variable_chars[0], self.variable_chars[2], \
-                  self.variable_chars[0], EncodeJavaScriptString(self.decompress_str), get_char_c, \
-                  self.variable_chars[2]) + \
-          ');' + \
-          'eval(%s)' % self.variable_chars[0];
-#          'for(%s in %s=%s)' % (self.variable_chars[1], self.variable_chars[2], EncodeJavaScriptString(self.decompress_str)) + \
-#              '%s=(%s=%s.split(%s%s)).join(%s.pop())' % (self.variable_chars[0], self.variable_chars[3], \
-#                  self.variable_chars[0], self.variable_chars[2], get_char_c, \
-#                  self.variable_chars[3]) + \
-#          ');' + \
+      reversed_decompress_str = [x for x in self.decompress_str];
+      reversed_decompress_str.reverse();
+      reversed_decompress_str = ''.join(reversed_decompress_str);
+      return ''.join([
+          '%s=%s;' % (compressed_data_var, EncodeJavaScriptString(self.compressed_str)),
+          'for(%s in %s=%s)' % (char_var, decompress_data_var, EncodeJavaScriptString(reversed_decompress_str)),
+              '%s=%s.split(%s%s),' % (temp_var, compressed_data_var, decompress_data_var, get_char_js),
+              '%s=%s.join(%s.pop());' % (compressed_data_var, temp_var, temp_var),
+          'eval(%s)' % compressed_data_var,
+      ]);
     elif self.max_unused_str_len == 2:
       start_index = len(self.decompress_str);
       return \
-          '%s=%s;' % (self.variable_chars[0], EncodeJavaScriptString(self.compressed_str)) + \
+          '%s=%s;' % (compressed_data_var, EncodeJavaScriptString(self.compressed_str)) + \
           'for(' + \
-              '%s=%d;' % (self.variable_chars[1], start_index) + \
-              '%s;' % self.variable_chars[1] + \
+              '%s=%d;' % (char_var, start_index) + \
+              '%s;' % char_var + \
               '%s=(%s=%s.split(%s.substr(%s-=(%s=%s<%d?1:2),%s))).join(%s.pop())' % \
-                  (self.variable_chars[0], self.variable_chars[2], self.variable_chars[0], \
-                  EncodeJavaScriptString(self.decompress_str), self.variable_chars[1], self.variable_chars[3], \
-                  self.variable_chars[1], self.two_char_switch_index + 1, self.variable_chars[3], self.variable_chars[2]) + \
+                  (compressed_data_var, temp_var, compressed_data_var, \
+                  EncodeJavaScriptString(self.decompress_str), char_var, inc_var, \
+                  char_var, self.two_char_switch_index + 1, inc_var, temp_var) + \
           ');' + \
-          'eval(%s)' % self.variable_chars[0];
+          'eval(%s)' % data_var;
     else:
       raise AssertionError('max_unused_str_len = ' + repr(self.max_unused_str_len) + '??');
 
