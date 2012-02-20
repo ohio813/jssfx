@@ -107,22 +107,22 @@ def EncodeJavaScriptString(string):
   return quote + encoded_string + quote;
 
 
-def CreateResult(compressed_code, first_char_code, last_char_code, skip_chars):
-  return 'd=%s;' % EncodeJavaScriptString(compressed_code) + \
+def CreateResult(compressed_code, first_char_code, last_char_code, skip_chars, variable_chars):
+  return '%s=%s;' % (variable_chars[0], EncodeJavaScriptString(compressed_code)) + \
          'for(' + \
-             'c=%d;' % (last_char_code - first_char_code + 1) + \
-             'c--;' + \
-             'd=(t=d.split(%sString.fromCharCode(%d+c)))' % (['', 'r='][skip_chars], first_char_code) + \
-                '.join(t.pop()%s)' % ['', '||r'][skip_chars] + \
+             '%s=%d;' % (variable_chars[1], last_char_code - first_char_code + 1) + \
+             '%s--;' % variable_chars[1] + \
+             '%s=(%s=%s.split(%sString.fromCharCode(%d+%s)))' % (variable_chars[0], variable_chars[2], variable_chars[0], ['', 'r='][skip_chars], first_char_code, variable_chars[1]) + \
+                '.join(%s.pop()%s)' % (variable_chars[2], ['', '||r'][skip_chars]) + \
          ');' + \
-         'eval(d)';
+         'eval(%s)' % variable_chars[0];
 
-def JsSfx32(code, valid_chars, valid_chars_description, log_level, quick_and_dirty, use_charat):
+def JsSfx32(code, valid_chars, valid_chars_description, log_level, quick_and_dirty, use_charat, variable_chars):
   best_result = None;
   best_result_details = None;
   if log_level == 1:
     print '      | JsSfx3.2\r',;
-  initial_result = CreateResult(code, 0, 0, False);
+  initial_result = CreateResult(code, 0, 0, False, variable_chars);
   for first_index in range(len(valid_chars)):
     progress = '@ %d%%' % (100*first_index / len(valid_chars));
     first_char = valid_chars[first_index]; first_char_code = ord(first_char);
@@ -136,7 +136,7 @@ def JsSfx32(code, valid_chars, valid_chars_description, log_level, quick_and_dir
       for data, result, skips_chars in results:
         # See what happens if we skip the character:
         skip_data = data + last_char;
-        skip_result = CreateResult(skip_data, first_char_code, last_char_code, True);
+        skip_result = CreateResult(skip_data, first_char_code, last_char_code, True, variable_chars);
         skip_result_details = '%02X-%02X%s' % (first_char_code, last_char_code, '+skips');
         if (not quick_and_dirty and len(EncodeJavaScriptString(last_char)) > 3) or last_char_used:
           # Character needs two chars to encode; it may turn out to be more efficient to skip it
@@ -148,7 +148,7 @@ def JsSfx32(code, valid_chars, valid_chars_description, log_level, quick_and_dir
           if repeated_sequence is not None:
             # Compression may be possible:
             compressed_data = data.replace(repeated_sequence, last_char) + last_char + repeated_sequence;
-            compressed_result = CreateResult(compressed_data, first_char_code, last_char_code, skips_chars);
+            compressed_result = CreateResult(compressed_data, first_char_code, last_char_code, skips_chars, variable_chars);
             compressed_result_details = '%02X-%02X%s' % (first_char_code, last_char_code, ['', '+skips'][skips_chars]);
             if len(compressed_result) < len(skip_result):
               new_results.append((compressed_data, compressed_result, skips_chars, compressed_result_details));
