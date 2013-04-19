@@ -102,7 +102,7 @@ class JsSfx12(object):
                   EncodeJavaScriptString(self.decompress_str), char_var, inc_var, \
                   char_var, self.two_char_switch_index + 1, inc_var, temp_var) + \
           ');' + \
-          'eval(%s)' % data_var;
+          'eval(%s)' % compressed_data_var;
     else:
       raise AssertionError('max_unused_str_len = ' + repr(self.max_unused_str_len) + '??');
 
